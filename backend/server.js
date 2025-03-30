@@ -1,73 +1,104 @@
-const express = require("express");
-const cors = require("cors");
-const bodyParser = require("body-parser");
-require("dotenv").config(); // Load environment variables
+  const express = require("express");
+  const cors = require("cors");
+  const bodyParser = require("body-parser");
+  const fs = require("fs");
 
-const app = express();
-const PORT = process.env.PORT || 5000; // Dynamic port (not used in Vercel)
+  const app = express();
+  const PORT = "5000";
 
-app.use(cors());
-app.use(bodyParser.json());
+  app.use(cors());
+  app.use(bodyParser.json());
 
-// Temporary in-memory storage (Replace with MongoDB for persistence)
-let users = [];
+  const dataFilePath = "./data.json";
 
-// Register or update user score
-app.post("/api/register", (req, res) => {
-  const { username, score } = req.body;
-
-  if (!username) {
-    return res.status(400).json({ message: "Username is required" });
+  // Helper function to read and write JSON data
+  function readData() {
+    const data = fs.readFileSync(dataFilePath);
+    return JSON.parse(data);
   }
 
-  const existingUser = users.find((user) => user.username === username);
-  if (existingUser) {
-    existingUser.score = score;
-  } else {
-    users.push({ username, score });
+  function writeData(data) {
+    fs.writeFileSync(dataFilePath, JSON.stringify(data, null, 2));
   }
 
-  res.json({ message: "User registered/updated successfully", users });
-});
+  // API to register or update a user score
+  app.post("/api/register", (req, res) => {
+    const { username, score } = req.body;
 
-// Get user score
-app.get("/api/user/:username", (req, res) => {
-  const { username } = req.params;
-  const user = users.find((user) => user.username === username);
+    if (!username) {
+      return res.status(400).json({ message: "Username is required" });
+    }
 
-  if (user) {
-    res.json({ username: user.username, score: user.score });
-  } else {
-    res.status(404).json({ message: "User not found" });
-  }
-});
+    const data = readData();
+    const existingUser = data.users.find((user) => user.username === username);
 
-// Placeholder for future database connection (MongoDB)
-app.get("/api/get-inviter-score/:username", async (req, res) => {
-  return res.status(501).json({ message: "Database not connected. Use MongoDB." });
-});
+    if (existingUser) {
+      existingUser.score = score;
+    } else {
+      data.users.push({ username, score });
+    }
 
-// Get a random question
-app.get("/api/questions", (req, res) => {
-  try {
-    const questions = require("./data/questions.json"); // Load questions file
-    const randomQuestion = questions[Math.floor(Math.random() * questions.length)];
+    writeData(data);
+    res.json({ message: "User registered/updated successfully" });
+  });
 
-    res.json({
-      city: randomQuestion.city,
-      clues: randomQuestion.clues || [],
-      fun_fact: randomQuestion.fun_fact || [],
-      trivia: randomQuestion.trivia || [],
-      options: [...new Set([randomQuestion.city, ...questions
-        .map(q => q.city)
-        .filter(city => city !== randomQuestion.city)
-        .sort(() => Math.random() - 0.5)
-        .slice(0, 3)])] // Generate 3 random unique options from other cities
-    });
-  } catch (error) {
-    res.status(500).json({ message: "Error fetching questions" });
-  }
-});
+  // API to get user score
+  app.get("/api/user/:username", (req, res) => {
+    const { username } = req.params;
+    const data = readData();
+    const user = data.users.find((user) => user.username === username);
 
-// Export the app for Vercel (DO NOT use app.listen)
-module.exports = app;
+    if (user) {
+      res.json({ username: user.username, score: user.score });
+    } else {
+      res.status(404).json({ message: "User not found" });
+    }
+  });
+
+  app.get('/api/get-inviter-score/:username', async (req, res) => {
+      const { username } = req.params;
+      try {
+        const user = await User.findOne({ username });
+        if (user) {
+          res.json({ score: user.score });
+        } else {
+          res.status(404).json({ message: 'User not found' });
+        }
+      } catch (error) {
+        res.status(500).json({ message: 'Error fetching inviter score' });
+      }
+  });
+
+  app.get("/api/questions", (req, res) => {
+      fs.readFile("./data/questions.json", "utf8", (err, data) => {
+        if (err) {
+          res.status(500).json({ message: "Error reading questions" });
+        } else {
+          try {
+            const questions = JSON.parse(data);
+            const randomQuestion = questions[Math.floor(Math.random() * questions.length)];
+    
+            // Construct the expected data format
+            const responseData = {
+              city: randomQuestion.city,
+              clues: randomQuestion.clues || [],
+              fun_fact: randomQuestion.fun_fact || [],
+              trivia: randomQuestion.trivia || [],
+              options: [...new Set([randomQuestion.city, ...questions
+                .map(q => q.city)
+                .filter(city => city !== randomQuestion.city)
+                .sort(() => Math.random() - 0.5)
+                .slice(0, 3)])] // Generate 3 random unique options from other cities
+            };
+    
+            res.json(responseData);
+          } catch (parseError) {
+            res.status(500).json({ message: "Invalid data format" });
+          }
+        }
+      });
+  });
+    
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
