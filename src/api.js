@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = "http://localhost:5000/api";
+const API_URL = "https://globe-backend-vjf9.vercel.app/";
 
 // Register or update a user with a score
 export const registerUser = async (username, score) => {
